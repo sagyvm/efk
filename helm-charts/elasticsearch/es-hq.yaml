@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: es-hq
+  labels:
+    component: elasticsearch
+    role: hq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: elasticsearch
+      role: hq
+  template:
+    metadata:
+      labels:
+        component: elasticsearch
+        role: hq
+    spec:
+      containers:
+      - name: es-hq
+        image:  docker.elastic.co/elastichq/elasticsearch-hq:release-v3.5.12
+        env:
+        - name: HQ_DEFAULT_URL
+          value: https://elastic:password@elasticsearch-master:9200
+        - name: HQ_VERIFY_CERTS 
+          value: "False"
+        - name: HQ_CA_CERTS
+          value: /usr/share/ca-certificates/certs
+        - name: HQ_ENABLE_SSL
+          value: "true"
+        resources:
+          limits:
+            cpu: 1
+        ports:
+        - containerPort: 5000
+          name: http
+        volumeMounts:
+        - mountPath: /usr/share/ca-certificates/certs
+          name: elastic-certificate-pem
+      nodeSelector: 
+        efkWorkload: enabled
+      volumes:
+      - name: elastic-certificate-pem
+        secret:
+          defaultMode: 444
+          secretName: elastic-certificate-pem
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hq
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+  labels:
+    component: elasticsearch
+    role: hq
+spec:
+  selector:
+    component: elasticsearch
+    role: hq
+  ports:
+  - name: http
+    port: 5004
+    targetPort: 5000
+    protocol: TCP
+  type: LoadBalancer
